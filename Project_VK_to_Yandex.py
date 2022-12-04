@@ -4,6 +4,7 @@ with open('token.txt', 'r') as file_object:
 import time
 import requests
 from pprint import pprint
+import json
 
 class VkFoto:
     url = 'https://api.vk.com/method/photos.get'
@@ -12,46 +13,60 @@ class VkFoto:
             'access_token': token_vk,
             'v': version    
         }
-    def profile_fotos(self, owner_id=457689717):
+        
+    def profile_fotos(self, owner_id, count=5):
         '''
         owner_id — идентификационный номер владельца аккаунта ВКонтакте
-        amount_foto  - количество выгружаемых фото максимального размера
+        count  - количество выгружаемых фото максимального размера
         '''
+        self.count = count
+        self.owner_id = owner_id
         profile_fotos_params = {
             'owner_id': owner_id,
             'album_id': 'profile',
             'extended': True,
             'photo_sizes': True,
-            'count': 1000
+            'count': count
         }
-        response = requests.get(self.url, params={**self.params, **profile_fotos_params}).json()
+        response = requests.get(self.url, params={**self.params, **profile_fotos_params}, timeout = 3).json()
         return response
 
-vk_foto_1 = VkFoto(token_vk, '5.131')
-count_z = vk_foto_1.profile_fotos()['response']['count']
+vk_foto = VkFoto(token_vk)
+vk_foto_1 = vk_foto.profile_fotos(1722493, 9)['response']
+counts = vk_foto.count
 
-for i in range(int(count_z)):
-    print(f'Число фотографийв профиле: {count_z}, это {i + 1} фотография.')
-    # Получаем контент с сылкой на фото
-    dicts_foto_1 = vk_foto_1.profile_fotos()['response']['items'][i]['sizes']
-    # pprint (dicts_foto_1)
-    # # Получаем дату добавления фото в профиль
-    # date_foto_1 = vk_foto_1.profile_fotos()['response']['items'][i]['date']
-    # pprint(date_foto_1)
-    # Получаем количество лайкосов фотки профиля
-    # likes_foto_1 = vk_foto_1.profile_fotos()['response']['items'][i]['likes']['count']
-    # pprint(likes_foto_1)
+try:
+    for i in range(int(counts)):
+        print(f'Выгружена {i + 1}-я фотография.')
+        # Получаем контент с сылкой на фото
+        dicts_foto_1 = vk_foto_1['items'][i]['sizes']
+        # Получаем дату добавления фото в профиль
+        date_foto_1 = vk_foto_1['items'][i]['date']
+        date_foto_1_utc = time.strftime('%Y.%m.%d %H:%M:%S', time.gmtime(date_foto_1))
+        print(f'Фотография была загружена: {date_foto_1_utc}')
+        # Получаем количество лайкосов фотки профиля
+        likes_foto_1 = vk_foto_1['items'][i]['likes']['count']
+        print(f'Количество лайков: {likes_foto_1}.')
+        # Dictionary Comprehension (словарное включение)
+        # Делает новый словарь с ключом - размер фото 
+        dct = {v['height'] * v['width']: v['url'] for v in dicts_foto_1}
+        # Находим фото с максимальным размером
+        max_dct = max(dct.items())
+        pprint (max_dct)
+        
+        # Создаем лист дубликатов лайков
+        sheet_of_duplicates = []
+        for j in range(int(counts)):
+            if likes_foto_1 == vk_foto_1['items'][j]['likes']['count']:
+                sheet_of_duplicates.append(f'{likes_foto_1}_{date_foto_1_utc}')
+            else:
+                sheet_of_duplicates.append(likes_foto_1)
+         
+        # Создаем json с информацией о фото
+        with open ('metadates.json', 'a') as outfile:
+          js = [{"file_name": f"{sheet_of_duplicates[i-1]}.jpg", "size": f"{max_dct[0]} pixels"}]
+          json.dump(js, outfile, indent=2)
+except IndexError:
+    print('Вы ввели большее количество фотографий чем есть у этого пользователя')
 
-    # Dictionary Comprehension (словарное включение)
-    ''' Делаем новый словарь с ключом - размер фото 
-        Делаем из нового словаря список и ...
-        сортируем этот список по размеру фото и по убыванию
-        Выбираем три ссылки на фото для сохранения на яндекс '''
-    dct = {v['height'] * v['width']:v['url'] for v in dicts_foto_1}
-    sort_dct = dict(sorted(dct.items(), reverse=True)[0:2])
-    pprint (sort_dct)
-
-import json
-with open ('metadates.json', 'w') as outfile:
-    js = [{ "file_name": "34.jpg", "size": "z"}]
-    json.dump(js, outfile, indent=2)
+    
